@@ -1,2 +1,3 @@
 .DS*
 *.png
+__pycache__
