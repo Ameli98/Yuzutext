@@ -1,35 +1,8 @@
 import cv2
-from scipy import stats as st
 import numpy as np
 import pytesseract
+from Global import *
 
-
-def Erosion(Mask:np.array) -> np.array:
-    # Only for old version.
-    # TODO: replace by C-code for performance.
-    Result = np.copy(Mask)
-    # 4 corners
-    Result[0, 0] = (Mask[0, 0] & Mask[0, 1] & Mask[1, 0])
-    Result[0, -1] = (Mask[0, -1] & Mask[0, -2] & Mask[1, -1])
-    Result[-1, 0] = (Mask[-1, 0] & Mask[-1, 1] & Mask[-2, 0])
-    Result[-1, -1]= (Mask[-1, -1] & Mask[-1, -2] & Mask[-2, -1])
-
-    # 4 edges
-    for m in range(Mask.shape[0])[1:-1]:
-        Result[m, 0] = (Mask[m, 0] & Mask[m, 1] & Mask[m - 1, 0] & Mask[m + 1, 0])
-        Result[m, -1] = (Mask[m, -1] & Mask[m, -2] & Mask[m - 1, -1] & Mask[m + 1, -1])
-    for n in range(Mask.shape[1])[1:-1]:
-        Result[0, n] = (Mask[0, n] & Mask[1, n] & Mask[0, n - 1] & Mask[0, n + 1])
-        Result[-1, n] = (Mask[-1, n] & Mask[-2, n] & Mask[-1, n - 1] & Mask[-1, n + 1])
-
-    # Inside indices
-    for i in range(Mask.shape[0])[1:-1]:
-        for j in range(Mask.shape[1])[1:-1]:
-            if Mask[i, j]:
-                continue
-            Result[i, j] = (Mask[i-1, j] & Mask[i+1, j] & Mask[i, j-1] & Mask[i, j+1])
-
-    return Result
 
 def PixelMode(Pixels:np.array) -> np.array:
     ColorDict = {}
@@ -50,12 +23,17 @@ def PixelMode(Pixels:np.array) -> np.array:
     PixelMode = Decode(ModeKey)
     return PixelMode
         
-def DiffOCR(TextImage:np.array, Background:np.array, Lang="jpn", Threshold=4) -> str:
+def DiffOCR(TextImage:np.array, Background:np.array, Lang="jpn", Threshold=Threshold) -> str:
     Diff = np.clip(TextImage - Background, 0, 255)
     Mask = (Diff != 0)
     Mask = (Mask[:, :, 0] | Mask[:, :, 1] | Mask[:, :, 2])
 
+    TextMask = np.full_like(Mask, False)
+    TextMask[TextArea[0][0] : TextArea[1][0], TextArea[0][1] : TextArea[1][1]] = True
+    Mask = Mask & TextMask
+
     TextColor = PixelMode(TextImage[Mask])
+    
     SelectText = lambda m : m[:, 0] & m[:, 1] & m[:, 2]
     Mask[Mask] = SelectText(np.abs(TextImage[Mask] - TextColor) < Threshold)
 
@@ -63,26 +41,12 @@ def DiffOCR(TextImage:np.array, Background:np.array, Lang="jpn", Threshold=4) ->
     Matting[Mask] = TextImage[Mask]
 
     text = pytesseract.image_to_string(Matting, lang=Lang)
+    TextImage[~TextMask] = 0
     return text
 
 if __name__ == "__main__":
-    TextImage = cv2.imread("Images/kanna1.png")
-    Background = cv2.imread("Images/kanna2.png")
-
-    # Diff = np.clip(TextImage - Background, 0, 255)
-    # Mask = (Diff != 0)
-    # Mask = (Mask[:, :, 0] | Mask[:, :, 1] | Mask[:, :, 2])
-
-
-    # TextColor = PixelMode(TextImage[Mask])
-    # SelectText = lambda m : m[:, 0] & m[:, 1] & m[:, 2]
-    # Mask[Mask] = SelectText(np.abs(TextImage[Mask] - TextColor) < 4)
-
-
-    # Matting = np.zeros_like(TextImage)
-    # Matting[Mask] = TextImage[Mask]
-
-    # cv2.imwrite("text.png", Matting)
+    TextImage = cv2.imread("Images/kurumi1.png")
+    Background = cv2.imread("Images/kurumi2.png")
 
     text = DiffOCR(TextImage, Background)
     print(text)
